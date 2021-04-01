@@ -50,6 +50,11 @@ void shell_loop()
 
     while(true)
     {
+        if(fflush(NULL) == -1)
+        {
+            // TODO
+        }
+
         if(isatty(current_input))
         {
             write(current_input, TERMINAL_PROMPT, TERMINAL_PROMPT_LEN);
@@ -64,8 +69,14 @@ void shell_loop()
 
         // SEARCH
         // EXCUTE: fork inside
-        stat_loc = execute_command(args_string);
-        printf(">> %d\n", WEXITSTATUS(stat_loc));
+        if(args_string[0] != NULL)
+        {
+            stat_loc = execute_command(args_string);
+            printf(">> %d\n", WEXITSTATUS(stat_loc));
+        }
+
+        free(cmd_string);
+        free(args_string);
     }
 
     return;
@@ -100,7 +111,6 @@ char** split_command(char* cmd_string)
 
     return args_string;
 }
-
 
 int execute_command(char** args_string)
 {
