@@ -18,12 +18,33 @@
 #define EXIT_ERROR   2
 
 
+typedef struct Alias_Pair Alias_Pair;
+struct Alias_Pair
+{
+    char *alias_name;
+    char *real_name;
+};
+
+
 void shell_init();
 void shell_loop();
 
 char* read_command();
 char** split_command(char* cmd_string);
 int execute_command(char** args_string);
+
+char* alias_check(char* arg_string);
+
+
+Alias_Pair alias_pairs[] =
+{
+    {"ll", "ls -alF"},
+    {"la", "ls -A"},
+    {"mv", "mv -i"},
+    {"cp", "cp -i"},
+    {"opendir", "xdg-open ."},
+    {NULL, NULL}
+};
 
 
 int main()
@@ -52,11 +73,12 @@ void shell_loop()
     {
         if(fflush(NULL) == -1)
         {
-            // TODO
+            // FIXME
         }
 
         if(isatty(current_input))
         {
+            // FIXME
             write(current_input, TERMINAL_PROMPT, TERMINAL_PROMPT_LEN);
         }
 
@@ -75,8 +97,9 @@ void shell_loop()
             printf(">> %d\n", WEXITSTATUS(stat_loc));
         }
 
-        free(cmd_string);
+        for(int i = 0; args_string[i] != NULL; i++) free(args_string[i]);
         free(args_string);
+        free(cmd_string);
     }
 
     return;
@@ -96,18 +119,33 @@ char** split_command(char* cmd_string)
     char** args_string = (char**)malloc(sizeof(char*) * MAX_ARGS_TOKENS);
     if(args_string == NULL)
     {
-        // TODO
+        // FIXME
         return args_string;
     }
 
     char* token = strtok(cmd_string, CMD_SPLIT_DELIMETERS);
-    int counter = 0;
-    while(token != NULL && counter < MAX_ARGS_TOKENS)
+    int token_counter = 0;
+    char* token_alias = alias_check(token);
+    if(token != NULL && token_alias != token)
     {
-        args_string[counter++] = strdup(token);
+        token = strtok(token_alias, CMD_SPLIT_DELIMETERS);
+        while(token != NULL && token_counter < MAX_ARGS_TOKENS)
+        {
+            args_string[token_counter++] = strdup(token);
+            token = strtok(NULL, CMD_SPLIT_DELIMETERS);
+        }
+        free(token_alias);
+
+        strtok(cmd_string, CMD_SPLIT_DELIMETERS);
         token = strtok(NULL, CMD_SPLIT_DELIMETERS);
     }
-    args_string[counter] = token;
+
+    while(token != NULL && token_counter < MAX_ARGS_TOKENS)
+    {
+        args_string[token_counter++] = strdup(token);
+        token = strtok(NULL, CMD_SPLIT_DELIMETERS);
+    }
+    args_string[token_counter] = token;
 
     return args_string;
 }
@@ -119,20 +157,34 @@ int execute_command(char** args_string)
     
     if(exec_pid == -1)
     {
-        // TODO
+        // FIXME
     }
     else if(exec_pid == 0)
     {
         if(execvp(args_string[0], args_string) == -1)
         {
-            // TODO
+            // FIXME
             exit(EXIT_FAILURE);
         }
     }
     else
     {
-        waitpid(exec_pid, &stat_loc, WUNTRACED);  // TODO
+        waitpid(exec_pid, &stat_loc, WUNTRACED);  // FIXME
     }
 
     return stat_loc;
+}
+
+char* alias_check(char* arg_string)
+{
+    int alias_counter = -1;
+    while(alias_pairs[++alias_counter].alias_name != NULL)
+    {
+        if(strcmp(arg_string, alias_pairs[alias_counter].alias_name) == 0)
+        {
+            return strdup(alias_pairs[alias_counter].real_name);
+        }
+    }
+
+    return arg_string;
 }

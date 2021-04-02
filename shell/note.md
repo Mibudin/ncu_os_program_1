@@ -3,32 +3,33 @@
 
 ## TODOs
 
-- Redirection
+- [ ] Redirection
     - Input
     - Output
     - `<<`
 
-- Pipe
+- [ ] RPipe
 
-- `readline`
+- [ ] R`readline`
 
-- Builtin commands
+- [ ] RBuiltin commands
 
-- Config
+- [ ] RConfig
 
-- Display exit code
+- [ ] RDisplay exit code
 
-- Quotes parsing
+- [ ] RQuotes parsing
 
-- Redundant blank (`\t`)
+- [ ] RRedundant blank (`\t`)
 
-- Multi-line input
+- [ ] RMulti-line input
 
-- Multi-command
+- [ ] RMulti-command
 
-- Background run
+- [ ] RBackground run
 
-- Variables
+- [ ] RVariables
 
-- Alias
+- [x] Alias
+    - For first argument.
 
