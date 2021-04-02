@@ -8,28 +8,33 @@
     - Output
     - `<<`
 
-- [ ] RPipe
+- [ ] Pipe
 
-- [ ] R`readline`
+- [ ] `readline`
 
-- [ ] RBuiltin commands
+- [ ] Builtin commands
+    - [ ] Exit
+    - [ ] Help
+    - [ ] Cd
 
-- [ ] RConfig
+- [ ] Config
 
-- [ ] RDisplay exit code
+- [ ] Display exit code
 
-- [ ] RQuotes parsing
+- [ ] Quotes parsing
 
-- [ ] RRedundant blank (`\t`)
+- [ ] Redundant blank (`\t`)
 
-- [ ] RMulti-line input
+- [ ] Multi-line input
 
-- [ ] RMulti-command
+- [ ] Multi-command
 
-- [ ] RBackground run
+- [ ] Background run
 
-- [ ] RVariables
+- [ ] Variables
 
 - [x] Alias
     - For first argument.
+
+- [ ] Error control
 

@@ -17,12 +17,14 @@
 // #define EXIT_FAILURE 1  // Already defined in `stdlib.h`
 #define EXIT_ERROR   2
 
+#define ERROR_NOT_DOUND -1
+
 
 typedef struct Alias_Pair Alias_Pair;
 struct Alias_Pair
 {
-    char *alias_name;
-    char *real_name;
+    char* alias_name;
+    char* real_name;
 };
 
 
@@ -31,9 +33,14 @@ void shell_loop();
 
 char* read_command();
 char** split_command(char* cmd_string);
-int execute_command(char** args_string);
+int execute_inner(char** args_string);
+int execute_outer(char** args_string);
 
 char* alias_check(char* arg_string);
+
+int func_cd(char** args_string);
+int func_help(char** args_string);
+int func_exit(char** args_string);
 
 
 Alias_Pair alias_pairs[] =
@@ -44,6 +51,21 @@ Alias_Pair alias_pairs[] =
     {"cp", "cp -i"},
     {"opendir", "xdg-open ."},
     {NULL, NULL}
+};
+
+char *builtin_cmd[] = 
+{
+    "cd",
+    "help",
+    "exit",
+    NULL
+};
+
+int (*builtin_func[])(char** args_string) =
+{
+    &func_cd,
+    &func_help,
+    &func_exit
 };
 
 
@@ -93,8 +115,16 @@ void shell_loop()
         // EXCUTE: fork inside
         if(args_string[0] != NULL)
         {
-            stat_loc = execute_command(args_string);
-            printf(">> %d\n", WEXITSTATUS(stat_loc));
+            if(execute_inner(args_string) == ERROR_NOT_DOUND)
+            {
+                stat_loc = execute_outer(args_string);
+                // TODO
+                printf(">> %d\n", WEXITSTATUS(stat_loc));
+            }
+            else
+            {
+                // FIXME
+            }
         }
 
         for(int i = 0; args_string[i] != NULL; i++) free(args_string[i]);
@@ -150,7 +180,22 @@ char** split_command(char* cmd_string)
     return args_string;
 }
 
-int execute_command(char** args_string)
+int execute_inner(char** args_string)
+{
+    int builtin_counter = -1;
+    while(builtin_cmd[++builtin_counter] != NULL)
+    {
+        if(strcmp(args_string[0], builtin_cmd[builtin_counter]) == 0)
+        {
+            return (*builtin_func[builtin_counter])(args_string);
+        }
+    }
+
+    // FIXME
+    return ERROR_NOT_DOUND;
+}
+
+int execute_outer(char** args_string)
 {
     pid_t exec_pid = fork();
     int stat_loc;
@@ -187,4 +232,33 @@ char* alias_check(char* arg_string)
     }
 
     return arg_string;
+}
+
+int func_cd(char** args_string)
+{
+    if(args_string[1] != NULL)
+    {
+        // FIXME
+    }
+
+    if(chdir(args_string[1]) != 0)
+    {
+        // FIXME
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int func_help(char** args_string)
+{
+    // TODO
+
+    return EXIT_SUCCESS;
+}
+
+int func_exit(char** args_string)
+{
+    exit(EXIT_SUCCESS);
+
+    return EXIT_SUCCESS;
 }
