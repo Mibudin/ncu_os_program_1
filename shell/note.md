@@ -13,33 +13,38 @@
 
 - [ ] Pipe
 
+<!-- Give up -->
 - [ ] `readline`
 
 - [ ] Builtin commands
     - [x] Exit
-    - [ ] Help
-    - [ ] Cd
+    - [x] Help
+    - [x] Cd
 
 - [ ] Config
 
 - [ ] Display exit code
 
-- [ ] Quotes parsing
+- [x] Quotes parsing
 
-- [ ] Redundant blank (`\t`)
+- [x] Redundant blank (`\t`)
 
-- [ ] Multi-line input
+- [x] Multi-line input
+    - [ ] `<<`
 
-- [ ] Multi-command
+- [x] Multi-command
 
-- [ ] Background run
+- [x] Background run
 
+<!-- Give up -->
 - [ ] Variables
 
-- [x] Alias
+<!-- Give up -->
+- [ ] Alias
     - For first argument.
 
 - [ ] Error control
 
+<!-- Give up -->
 - [ ] Escape character
 

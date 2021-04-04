@@ -4,19 +4,18 @@
 #include<string.h>
 #include<unistd.h>
 #include<sys/wait.h>
+#include<sys/stat.h>
 
 
 #define TERMINAL_PROMPT "> "
 #define TERMINAL_PROMPT_LEN 2
 
 #define MAX_CMD_STR_LENGTH   256
-#define MAX_ALIAS_STR_LENGTH 256
 #define MAX_CMD_INFO_NUM     64
-#define MAX_ARG_TOK_NUM      64
+#define MAX_ARG_TOK_NUM      64  // -1 (NULL)
 #define MAX_ARGS_TOKENS 32
 
 #define CMD_SPLIT_DELIMETERS " \n"
-
 
 #define EXIT_SUCCESS 0  // Same as the already defined one in `stdlib.h`
 #define EXIT_FAILURE 1  // Same as the already defined one in `stdlib.h`
@@ -57,8 +56,8 @@ void shell_loop();
 int read_commands();
 int parse_commands(int cmd_string_size);
 int parse_args(int cmd_info_index);
-int execute_inner(char** args_string);
-int execute_outer(char** args_string);
+int execute_inner(int cmd_info_index);
+int execute_outer(int cmd_info_index);
 
 char* alias_check(char* arg_string);
 
@@ -148,11 +147,11 @@ void shell_loop()
             }
             if(cmd_infos[i].arg_strings[0] != NULL)
             {
-                if(execute_inner(cmd_infos[i].arg_strings) == ERROR_NOT_DOUND)
+                if(execute_inner(i) == ERROR_NOT_DOUND)
                 {
-                    stat_loc = execute_outer(cmd_infos[i].arg_strings);
+                    stat_loc = execute_outer(i);
                     // TODO
-                    printf(">> %d\n", WEXITSTATUS(stat_loc));
+                    fprintf(stdout, ">> %d\n", WEXITSTATUS(stat_loc));
                 }
             }
         }
@@ -261,7 +260,7 @@ int parse_commands(int cmd_string_size)
     //     while(token != NULL && token_counter < MAX_ARGS_TOKENS)
     //     {
     //         args_string[token_counter++] = strdup(token);
-    //         token = strtok(NULL, CMD_SPLIT_DELIMETERS);
+    //         token = strtok( NULL, CMD_SPLIT_DELIMETERS);
     //     }
     //     free(token_alias);
 
@@ -339,6 +338,10 @@ int parse_commands(int cmd_string_size)
             default:
                 if(!parsing_cmd)
                 {
+                    if(cmd_infos_num + 1 > MAX_CMD_INFO_NUM)
+                    {
+                        // FIXME
+                    }
                     parsing_cmd = true;
                     current_cmd_info = &(cmd_infos[cmd_infos_num]);
                     current_cmd_info->cmd_string_begin = i;
@@ -346,8 +349,11 @@ int parse_commands(int cmd_string_size)
                 break;
         }
     }
-    cmd_infos[cmd_infos_num].cmd_string_end = i;
-    cmd_infos_num++;
+    if(parsing_cmd)
+    {
+        current_cmd_info->cmd_string_end = i;
+        cmd_infos_num++;
+    }
 
     return cmd_infos_num;
 }
@@ -480,24 +486,29 @@ int parse_args(int cmd_info_index)
                 break;
         }
     }
-    if(arg_tok_num + 1 < MAX_ARG_TOK_NUM)
+    if(arg_tok_num + 1 <= MAX_ARG_TOK_NUM)
     {
         current_cmd_info->arg_strings[arg_tok_num] = NULL;
+    }
+    else
+    {
+        // FIXME
     }
 
     return arg_tok_num;
 }
 
-int execute_inner(char** args_string)
+int execute_inner(int cmd_info_index)
 {
-    if(args_string != NULL)
+    Command_Info* cmd_info = &(cmd_infos[cmd_info_index]);
+    if(cmd_info->arg_strings[0] != NULL)
     {
         int builtin_counter = -1;
         while(builtin_cmd[++builtin_counter] != NULL)
         {
-            if(strcmp(args_string[0], builtin_cmd[builtin_counter]) == 0)
+            if(strcmp(cmd_info->arg_strings[0], builtin_cmd[builtin_counter]) == 0)
             {
-                return (*builtin_func[builtin_counter])(args_string);
+                return (*builtin_func[builtin_counter])(cmd_info->arg_strings);
             }
         }
     }
@@ -506,8 +517,10 @@ int execute_inner(char** args_string)
     return ERROR_NOT_DOUND;
 }
 
-int execute_outer(char** args_string)
+int execute_outer(int cmd_info_index)
 {
+    Command_Info* cmd_info = &(cmd_infos[cmd_info_index]);
+
     pid_t exec_pid = fork();
     int stat_loc;
     
@@ -517,7 +530,7 @@ int execute_outer(char** args_string)
     }
     else if(exec_pid == 0)
     {
-        if(execvp(args_string[0], args_string) == -1)
+        if(execvp(cmd_info->arg_strings[0], cmd_info->arg_strings) == -1)
         {
             // FIXME
             exit(EXIT_FAILURE);
@@ -525,7 +538,10 @@ int execute_outer(char** args_string)
     }
     else
     {
-        waitpid(exec_pid, &stat_loc, WUNTRACED);  // FIXME
+        if(!cmd_info->is_exec_background)
+        {
+            waitpid(exec_pid, &stat_loc, WUNTRACED);  // FIXME
+        }
     }
 
     return stat_loc;
@@ -550,7 +566,16 @@ char* alias_check(char* arg_string)
 
 int func_cd(char** args_string)
 {
-    if(args_string[1] != NULL)
+    struct stat st;
+
+    if(args_string[1] == NULL)
+    {
+        // FIXME
+        return EXIT_FAILURE;
+    }
+
+    stat(args_string[1], &st);
+    if(!S_ISDIR(st.st_mode))
     {
         // FIXME
     }
@@ -566,12 +591,34 @@ int func_cd(char** args_string)
 int func_help(char** args_string)
 {
     // TODO
+    fprintf(stdout, "                                \n"
+                    "/******************************\\\n"
+                    "|                              |\n"
+                    "|      Nice to meet you.       |\n"
+                    "|                              |\n"
+                    "|    Welcome to this shell.    |\n"
+                    "|                              |\n"
+                    "\\***********#******#***********/\n");
+    fprintf(stdout, "           /        \\           \n"
+                    "          /          \\          \n"
+                    " v       /            \\       v \n"
+                    "*#~~~~~~#~~~~~~~~~~~~~~#~~~~~~#*\n"
+                    " { -  -  -  -  -  -  -  -  -  } \n"
+                    " {  THE ETERNAL DEVELOPING! - } \n"
+                    " { - THE EVERLASTING BUGS! -  } \n"
+                    " {  - THE PERMANENT PAIN!-  - } \n"
+                    " { -  -THE FOREVER WORK!-  -  } \n"
+                    " {  -  -  -  -  -  -  -  -  - } \n"
+                    "*#~~~~~~~~~~~~~~~~~~~~~~~~~~~~#*\n"
+                    " ^                            ^ \n"
+                    "                                \n");
 
     return EXIT_SUCCESS;
 }
 
 int func_exit(char** args_string)
 {
+    wait(NULL);
     exit(EXIT_SUCCESS);
 
     return EXIT_SUCCESS;
