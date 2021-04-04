@@ -4,16 +4,19 @@
 ## TODOs
 
 - [ ] Redirection
-    - Input
-    - Output
-    - `<<`
+    - [ ] `<`
+    - [ ] `<<`
+    - [ ] `>`
+    - [ ] `>>`
+    - [ ] `>&`
+    - [ ] `>>&`
 
 - [ ] Pipe
 
 - [ ] `readline`
 
 - [ ] Builtin commands
-    - [ ] Exit
+    - [x] Exit
     - [ ] Help
     - [ ] Cd
 
@@ -37,4 +40,6 @@
     - For first argument.
 
 - [ ] Error control
+
+- [ ] Escape character
 
