@@ -11,12 +11,12 @@
     - [ ] `>&`
     - [ ] `>>&`
 
-- [ ] Pipe
+- [x] Pipe
 
 <!-- Give up -->
 - [ ] `readline`
 
-- [ ] Builtin commands
+- [x] Builtin commands
     - [x] Exit
     - [x] Help
     - [x] Cd
@@ -39,7 +39,6 @@
 <!-- Give up -->
 - [ ] Variables
 
-<!-- Give up -->
 - [ ] Alias
     - For first argument.
 
@@ -48,3 +47,4 @@
 <!-- Give up -->
 - [ ] Escape character
 
+- [ ] `Const` in C
