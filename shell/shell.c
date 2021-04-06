@@ -3,18 +3,34 @@
 #include<stdbool.h>
 #include<string.h>
 #include<unistd.h>
+#include<fcntl.h>
 #include<sys/wait.h>
 #include<sys/stat.h>
 
 
+// TODO
 #define TERMINAL_PROMPT "> "
 // #define TERMINAL_PROMPT_LEN 2
+
+#define SGR_DEFT       "\001\033[0m\002"          // Set all attributes to default
+#define SGR_BDBR       "\001\033[1m\002"          // Set bold and bright
+#define SGR_UDLN       "\001\033[4m\002"          // Set underline
+#define SGR_NOUL       "\001\033[24m\002"         // Set no underline
+#define SGR_CLOR(x, y) "\001\033["#x";"#y"m\002"  // Set color (x: background (40 ~ 49), y: foreground (30 ~ 39))
 
 #define MAX_CMD_STR_LENGTH 256
 #define MAX_CMD_INFO_NUM   64
 #define MAX_ARG_TOK_NUM    64  // -1 (NULL)
 // #define MAX_ARGS_TOKENS 32
 #define MAX_CMD_REDIR_NUM  8
+
+#define CMD_REDIR_FROM_NONE    0
+#define CMD_REDIR_FROM_NRML    1
+#define CMD_REDIR_TO_NONE      0
+#define CMD_REDIR_TO_NRML      1
+#define CMD_REDIR_TO_APPN      2
+#define CMD_REDIR_TO_ERRO      3
+#define CMD_REDIR_TO_ERRO_APPN 4
 
 // #define CMD_SPLIT_DELIMETERS " \n"
 
@@ -26,6 +42,11 @@
 #define EXEC_NORMAL    0
 #define EXEC_FAILURE   1
 #define EXEC_PIPE      2
+
+#define FILE_OP_FROM    O_RDONLY
+#define FILE_OP_TO_TRNC O_WRONLY | O_TRUNC  | O_CREAT
+#define FILE_OP_TO_APPN O_WRONLY | O_APPEND | O_CREAT
+#define FILE_PERM_DEFT  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH  // For the permissions `-rw-rw-r--` of a file
 
 
 // typedef struct Alias_Pair Alias_Pair;
@@ -101,6 +122,8 @@ const int (*builtin_func[])(char** args_string) =
     &func_exit
 };
 
+bool is_term_sgr;  // Whether the terminal supports ASCII escape code.
+
 char cmd_string[MAX_CMD_STR_LENGTH];
 Command_Info cmd_infos[MAX_CMD_INFO_NUM];
 int cmd_infos_num;
@@ -117,6 +140,8 @@ int main()
 
 void shell_init()
 {
+    is_term_sgr = (getenv("TERM") != NULL);
+
     return;
 }
 
@@ -130,6 +155,7 @@ void shell_loop()
     // int current_input = STDIN_FILENO;
     int stdin_fd;
     int stdout_fd;
+    int stderr_fd;
 
     while(true)
     {
@@ -139,7 +165,8 @@ void shell_loop()
         }
         stdin_fd = dup(STDIN_FILENO);
         stdout_fd = dup(STDOUT_FILENO);
-        if(stdin_fd == -1 || stdout_fd == -1)
+        stderr_fd = dup(STDERR_FILENO);
+        if(stdin_fd == -1 || stdout_fd == -1 || stderr_fd == -1)
         {
             // FIXME
         }
@@ -148,7 +175,14 @@ void shell_loop()
         {
             // TODO
             // write(current_input, TERMINAL_PROMPT, TERMINAL_PROMPT_LEN);
-            fprintf(stdout, TERMINAL_PROMPT);
+            if(is_term_sgr)
+            {
+                fprintf(stdout, SGR_BDBR SGR_CLOR(49, 34) TERMINAL_PROMPT SGR_DEFT);
+            }
+            else
+            {
+                fprintf(stdout, TERMINAL_PROMPT);
+            }
         }
 
         // READ
@@ -170,6 +204,10 @@ void shell_loop()
             if(cmd_infos[i].arg_strings[0] != NULL)
             {
                 // printf(">>>>\n");
+                if(fflush(NULL) == -1)
+                {
+                    // FIXME: ERROR: Flush all streams error.
+                }
                 if((exec_status = execute_inner(i)) == EXEC_NO_INNER)
                 {
                     switch(exec_status = execute_outer(i))
@@ -180,6 +218,10 @@ void shell_loop()
                                 // FIXME
                             }
                             if(dup2(stdout_fd, STDOUT_FILENO) == -1)
+                            {
+                                // FIXME
+                            }
+                            if(dup2(stderr_fd, STDERR_FILENO) == -1)
                             {
                                 // FIXME
                             }
@@ -227,6 +269,10 @@ void shell_loop()
             // FIXME
         }
         if(close(stdout_fd) == -1)
+        {
+            // FIXME
+        }
+        if(close(stderr_fd) == -1)
         {
             // FIXME
         }
@@ -391,19 +437,6 @@ int parse_commands(int cmd_string_size)
                     parsing_cmd = false;
                 }
                 break;
-
-            case '&':
-                if(parsing_double_quote || parsing_single_quote) break;
-
-                cmd_string[i] = '\0';
-                if(parsing_cmd)
-                {
-                    current_cmd_info->is_exec_background = true;
-                    current_cmd_info->cmd_string_end = i;
-                    cmd_infos_num++;
-                    parsing_cmd = false;
-                }
-                break;
             
             case '|':
                 if(parsing_double_quote || parsing_single_quote) break;
@@ -449,7 +482,10 @@ int parse_args(int cmd_info_index)
     bool parsing_token = false;
     bool parsing_single_quote = false;
     bool parsing_double_quote = false;
-    bool parsing_file_path = false;
+    bool parsing_redir_from_path = false;
+    bool parsing_redir_to_path = false;
+    int redir_from_num = 0;
+    int redir_to_num = 0;
     for(int i = current_cmd_info->cmd_string_begin; i <= current_cmd_info->cmd_string_end; i++)
     {
         switch(cmd_string[i])
@@ -534,44 +570,130 @@ int parse_args(int cmd_info_index)
 
                 parsing_double_quote = !parsing_double_quote;
                 break;
+            
+            case '&':
+                if(parsing_double_quote || parsing_single_quote) break;
 
-            // case '>':  // TODO
-            //     if(parsing_token)
-            //     {
-            //         arg_tok_num++;
-            //         parsing_token = false;
-            //     }
-            //     break;
+                cmd_string[i] = '\0';
+                if(parsing_token)
+                {
+                    arg_tok_num++;
+                    parsing_token = false;
+                }
 
-            // case '<':  // TODO
-            //     if(parsing_token)
-            //     {
-            //         arg_tok_num++;
-            //         parsing_token = false;
-            //     }
+                current_cmd_info->is_exec_background = true;
+                break;
 
-            //     if(i + 1 < current_cmd_info->cmd_string_end)
-            //     {
-            //         if(cmd_string[i + 1] == '<')
-            //         {
+            case '<':  // TODO
+                if(parsing_single_quote || parsing_double_quote) break;
 
-            //         }
-            //     }
-            //     break;
+                cmd_string[i] = '\0';
+                if(parsing_token)
+                {
+                    arg_tok_num++;
+                    parsing_token = false;
+                }
+
+                if(parsing_redir_from_path || parsing_redir_to_path)
+                {
+                    // FIXME
+                }
+                if(redir_from_num >= MAX_CMD_REDIR_NUM)
+                {
+                    // FIXME
+                }
+                parsing_redir_from_path = true;
+                current_cmd_info->redirect_from[redir_from_num] = CMD_REDIR_FROM_NRML;
+                break;
+            
+            case '>':  // TODO
+                if(parsing_single_quote || parsing_double_quote) break;
+
+                cmd_string[i] = '\0';
+                if(parsing_token)
+                {
+                    arg_tok_num++;
+                    parsing_token = false;
+                }
+
+                if(parsing_redir_from_path || parsing_redir_to_path)
+                {
+                    // FIXME
+                }
+                if(redir_to_num >= MAX_CMD_REDIR_NUM)
+                {
+                    // FIXME
+                }
+                parsing_redir_to_path = true;
+                if(i + 1 < current_cmd_info->cmd_string_end && cmd_string[i + 1] == '>')
+                {
+                    cmd_string[i + 1] = '\0';
+                    if(i + 2 < current_cmd_info->cmd_string_end && cmd_string[i + 2] == '&')
+                    {
+                        cmd_string[i + 2] = '\0';
+                        current_cmd_info->redirect_to[redir_to_num] = CMD_REDIR_TO_ERRO_APPN;
+                        i = i + 2;
+                    }
+                    else
+                    {
+                        printf("<><><>\n");
+                        current_cmd_info->redirect_to[redir_to_num] = CMD_REDIR_TO_APPN;
+                        i = i + 1;
+                    }
+                }
+                else
+                {
+                    if(i + 1 < current_cmd_info->cmd_string_end && cmd_string[i + 1] == '&')
+                    {
+                        cmd_string[i + 1] = '\0';
+                        current_cmd_info->redirect_to[redir_to_num] = CMD_REDIR_TO_ERRO;
+                        i = i + 1;
+                    }
+                    else
+                    {
+                        current_cmd_info->redirect_to[redir_to_num] = CMD_REDIR_TO_NRML;
+                    } 
+                }
+                break;
 
             default:
                 if(!parsing_token)
                 {
-                    if(arg_tok_num + 1 >= MAX_ARG_TOK_NUM)
+                    if(parsing_redir_from_path)
                     {
-                        // FIXME: ERROR: Arguments too many error.
+                        current_cmd_info->redirect_strings[redir_from_num << 1] = &(cmd_string[i]);
+                        printf("><1 %d, %s\n", redir_from_num << 1, current_cmd_info->redirect_strings[redir_from_num << 1]);
+                        redir_from_num++;
+                        arg_tok_num--;
+                        parsing_redir_from_path = false;
                     }
+                    else if(parsing_redir_to_path)
+                    {
+                        current_cmd_info->redirect_strings[(redir_to_num << 1)+ 1] = &(cmd_string[i]);
+                        printf("><2 %d, %s\n", (redir_to_num << 1) + 1, current_cmd_info->redirect_strings[(redir_to_num << 1) + 1]);
+                        redir_to_num++;
+                        arg_tok_num--;
+                        parsing_redir_to_path = false;
+                    }
+                    else
+                    {
+                        if(arg_tok_num + 1 >= MAX_ARG_TOK_NUM)
+                        {
+                            // FIXME: ERROR: Arguments too many error.
+                        }
+                        current_cmd_info->arg_strings[arg_tok_num] = &(cmd_string[i]);
+                    }
+
                     parsing_token = true;
-                    current_cmd_info->arg_strings[arg_tok_num] = &(cmd_string[i]);
                 }
                 break;
         }
     }
+    // if(parsing_redir_from_path || parsing_redir_to_path)
+    // {
+    //     // FIXME
+    //     printf(">>><><>< %s\\\n", current_cmd_info->redirect_strings[0]);
+    // }
     current_cmd_info->arg_strings[arg_tok_num] = NULL;
     // if(arg_tok_num + 1 <= MAX_ARG_TOK_NUM)
     // {
@@ -702,16 +824,23 @@ void init_cmd_info(Command_Info* cmd_info)
     cmd_info->cmd_string_begin = -1;
     cmd_info->cmd_string_end = -1;
 
-    // for(int i = 0; i < MAX_ARG_TOK_NUM; i++)
-    // {
-    //     cmd_info->arg_strings[i] = NULL;
-    // }
-    cmd_info->arg_strings[0] = NULL;
+    for(int i = 0; i < MAX_ARG_TOK_NUM; i++)
+    {
+        cmd_info->arg_strings[i] = NULL;
+    }
+    // cmd_info->arg_strings[0] = NULL;
 
-    cmd_info->redirect_from[0] = -1;
-    cmd_info->redirect_to[0] = -1;
+    for(int i = 0; i < MAX_CMD_REDIR_NUM; i++)
+    {
+        cmd_info->redirect_from[i] = CMD_REDIR_FROM_NONE;
+        cmd_info->redirect_to[i] = CMD_REDIR_TO_NONE;
+        cmd_info->redirect_strings[i << 1] = NULL;
+        cmd_info->redirect_strings[(i << 1) + 1] = NULL;
+    }
+    // cmd_info->redirect_from[0] = CMD_REDIR_FROM_NONE;
+    // cmd_info->redirect_to[0] = CMD_REDIR_TO_NONE;
 
-    cmd_info->redirect_strings[0] = NULL;
+    // cmd_info->redirect_strings[0] = NULL;
 
     cmd_info->is_exec_background = false;
     cmd_info->exec_pid = 0;
@@ -725,6 +854,82 @@ int set_cmd_io(Command_Info* cmd_info, int input_file_desc, int output_file_desc
     // TODO
 
     // REDIR
+    int redir_from_fd, redir_from_flag, redir_from_fd2;
+    for(int i = 0; i < MAX_CMD_REDIR_NUM; i++)
+    {
+        if(cmd_info->redirect_from[i] == CMD_REDIR_FROM_NONE) break;
+        printf("<><><><>1\n");
+
+        if(cmd_info->redirect_strings[i << 1] == NULL)
+        {
+            // FIXME
+        }
+        switch(cmd_info->redirect_from[i])
+        {
+            case CMD_REDIR_FROM_NRML:
+                redir_from_flag = FILE_OP_FROM;
+                redir_from_fd2 = STDIN_FILENO;
+                break;
+        }
+        redir_from_fd = open(cmd_info->redirect_strings[i << 1], redir_from_flag, FILE_PERM_DEFT);
+        printf("<><><><>1 %s\n", cmd_info->redirect_strings[i << 1]);
+        if(redir_from_fd == NULL)
+        {
+            // FIXME
+        }
+        if(dup2(redir_from_fd, redir_from_fd2) == -1)
+        {
+            // FIXME
+        }
+        if(close(redir_from_fd) == -1)
+        {
+            // FIXME
+        }
+    }
+    int redir_to_fd, redir_to_flag, redir_to_fd2;
+    for(int i = 0; i < MAX_CMD_REDIR_NUM; i++)
+    {
+        if(cmd_info->redirect_to[i] == CMD_REDIR_TO_NONE) break;
+        printf("<><><><>2\n");
+
+        if(cmd_info->redirect_strings[(i << 1) + 1] == NULL)
+        {
+            // FIXME
+        }
+        switch(cmd_info->redirect_to[i])
+        {
+            case CMD_REDIR_TO_NRML:
+                redir_to_flag = FILE_OP_TO_TRNC;
+                redir_to_fd2 = STDOUT_FILENO;
+                break;
+            case CMD_REDIR_TO_APPN:
+                redir_to_flag = FILE_OP_TO_APPN;
+                redir_to_fd2 = STDOUT_FILENO;
+                break;
+            case CMD_REDIR_TO_ERRO:
+                redir_to_flag = FILE_OP_TO_TRNC;
+                redir_to_fd2 = STDERR_FILENO;
+                break;
+            case CMD_REDIR_TO_ERRO_APPN:
+                redir_to_flag = FILE_OP_TO_APPN;
+                redir_to_fd2 = STDERR_FILENO;
+                break;
+        }
+        redir_to_fd = open(cmd_info->redirect_strings[(i << 1) + 1], redir_to_flag, FILE_PERM_DEFT);  // TODO
+        printf("<><><><>2 %s\n", cmd_info->redirect_strings[(i << 1) + 1]);
+        if(redir_to_fd == NULL)
+        {
+            // FIXME
+        }
+        if(dup2(redir_to_fd, redir_to_fd2) == -1)
+        {
+            // FIXME
+        }
+        if(close(redir_to_fd) == -1)
+        {
+            // FIXME
+        }
+    }
 
     // PIPE
     if(input_file_desc != STDIN_FILENO)

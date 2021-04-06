@@ -3,13 +3,17 @@
 
 ## TODOs
 
-- [ ] Redirection
-    - [ ] `<`
-    - [ ] `<<`
-    - [ ] `>`
-    - [ ] `>>`
-    - [ ] `>&`
-    - [ ] `>>&`
+- [x] Redirection
+    - [x] `<`
+        - conti. followed `bash` (only last)
+    - [ ] `<<`  <!-- Give up -->
+    - [x] `>`
+        - conti. followed `bash` (only last)
+    - [x] `>>`
+    - [x] `>&`
+        - only `stderr`
+    - [x] `>>&`
+        - only `stderr`
 
 - [x] Pipe
 
@@ -48,3 +52,5 @@
 - [ ] Escape character
 
 - [ ] `Const` in C
+
+- [ ] Colorized
