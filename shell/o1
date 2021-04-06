@@ -1,11 +1,22 @@
 total 104
-drwxrwxr-x 2 mibudin mibudin  4096 Apr  6 22:52 .
+drwxrwxr-x 2 mibudin mibudin  4096 Apr  7 01:14 .
 drwxrwxr-x 7 mibudin mibudin  4096 Apr  6 21:35 ..
--rw-rw-r-- 1 mibudin mibudin   757 Apr  6 22:09 note.md
--rw-rw-r-- 1 mibudin mibudin     0 Apr  6 22:53 o1
--rw-rw-r-- 1 mibudin mibudin     0 Apr  6 22:44 o2
+-rw-rw-r-- 1 mibudin mibudin   757 Apr  6 23:10 note.md
+-rw-rw-r-- 1 mibudin mibudin     0 Apr  7 01:14 o1
+-rw-rw-r-- 1 mibudin mibudin   220 Apr  6 23:08 o2
+-rw-rw-r-- 1 mibudin mibudin     0 Apr  6 23:10 o3
 -rw-rw-r-- 1 mibudin mibudin 12855 Apr  4 21:09 ref.c
 -rwxrwxr-x 1 mibudin mibudin 18040 Apr  4 21:10 shell_backup.out
--rw-rw-r-- 1 mibudin mibudin 29325 Apr  6 22:52 shell.c
--rwxrwxr-x 1 mibudin mibudin 22608 Apr  6 22:52 shell.out
+-rw-rw-r-- 1 mibudin mibudin 28051 Apr  7 01:14 shell.c
+-rwxrwxr-x 1 mibudin mibudin 22528 Apr  7 01:14 shell.out
+total 108
+drwxrwxr-x 2 mibudin mibudin  4096 Apr  7 01:48 .
 drwxrwxr-x 7 mibudin mibudin  4096 Apr  6 21:35 ..
+-rw-rw-r-- 1 mibudin mibudin   826 Apr  7 01:25 note.md
+-rw-rw-r-- 1 mibudin mibudin   553 Apr  7 01:14 o1
+-rw-rw-r-- 1 mibudin mibudin   220 Apr  6 23:08 o2
+-rw-rw-r-- 1 mibudin mibudin     0 Apr  6 23:10 o3
+-rw-rw-r-- 1 mibudin mibudin 12855 Apr  4 21:09 ref.c
+-rwxrwxr-x 1 mibudin mibudin 18040 Apr  4 21:10 shell_backup.out
+-rw-rw-r-- 1 mibudin mibudin 27247 Apr  7 01:44 shell.c
+-rwxrwxr-x 1 mibudin mibudin 22528 Apr  7 01:48 shell.out

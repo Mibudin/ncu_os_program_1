@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "wait.h": "c",
-        "stat.h": "c"
+        "stat.h": "c",
+        "string.h": "c",
+        "typeinfo": "c"
     }
 }

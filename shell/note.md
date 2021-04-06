@@ -25,16 +25,17 @@
     - [x] Help
     - [x] Cd
 
+<!-- Give up -->
 - [ ] Config
 
-- [ ] Display exit code
+- [x] Display exit code
 
 - [x] Quotes parsing
 
 - [x] Redundant blank (`\t`)
 
 - [x] Multi-line input
-    - [ ] `<<`
+    - [ ] `<<`  <!-- Give up -->
 
 - [x] Multi-command
 
@@ -43,6 +44,7 @@
 <!-- Give up -->
 - [ ] Variables
 
+<!-- Give up -->
 - [ ] Alias
     - For first argument.
 
@@ -51,6 +53,9 @@
 <!-- Give up -->
 - [ ] Escape character
 
-- [ ] `Const` in C
+- [x] `Const` in C
 
-- [ ] Colorized
+- [x] Colorized
+    - [x] Prompt
+
+- [ ] Report
