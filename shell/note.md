@@ -5,10 +5,10 @@
 
 - [x] Redirection
     - [x] `<`
-        - conti. followed `bash` (only last)
+        - conti. following `bash` (only last)
     - [ ] `<<`  <!-- Give up -->
     - [x] `>`
-        - conti. followed `bash` (only last)
+        - conti. following `bash` (only last)
     - [x] `>>`
     - [x] `>&`
         - only `stderr`
@@ -16,6 +16,9 @@
         - only `stderr`
 
 - [x] Pipe
+
+- [x] Redirection and pipe
+    - Following `bash` (first pipe, then redirection, so redirection overlay pipe)
 
 <!-- Give up -->
 - [ ] `readline`
@@ -48,7 +51,7 @@
 - [ ] Alias
     - For first argument.
 
-- [ ] Error control
+- [x] Error control
 
 <!-- Give up -->
 - [ ] Escape character

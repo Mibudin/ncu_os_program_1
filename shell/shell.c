@@ -10,6 +10,7 @@
 
 #define SGR_DEFT          "\001\033[0m\002"          // Set all attributes to be default.
 #define SGR_BDBR          "\001\033[1m\002"          // Set to be bold and bright.
+#define SGR_NOBB          "\001\033[22m\002"         // Set to be not bold and bright.
 #define SGR_UDLN          "\001\033[4m\002"          // Set to be with underline.
 #define SGR_NOUL          "\001\033[24m\002"         // Set to be with no underline.
 #define SGR_CLOR(b, f)    "\001\033["#b";"#f"m\002"  // Set color (b: background (40 ~ 49), f: foreground (30 ~ 39)).
@@ -20,13 +21,13 @@
 #define TERM_EXIT_SGR     SGR_BDBR SGR_CLOR(49, 32) TERM_EXIT   SGR_DEFT
 #define TERM_EXIT_ERR_SGR SGR_BDBR SGR_CLOR(49, 31) TERM_EXIT   SGR_DEFT
 #define TERM_ERR          "\n>>> ERROR <<<\n"    \
-                            ">>> Type: %s <<<\n" \
-                            ">>>  Msg: %s <<<\n" \
-                            ">>>  Pos: %s <<<\n\n"   // With `%s` for the type, `%s` for the message, `%s` for the position.
+                            ">-- Type: %s --<\n" \
+                            ">--  Msg: %s --<\n" \
+                            ">--  Pos: %s --<\n\n"   // With `%s` for the type, `%s` for the message, `%s` for the position.
 #define TERM_ERR_SGR      SGR_BDBR SGR_CLOR(49, 31) "\n>>> ERROR <<<\n"    \
-                                   SGR_CLOR(49, 33)   ">>> Type: %s <<<\n" \
-                                                      ">>>  Msg: %s <<<\n" \
-                                                      ">>>  Pos: %s <<<\n\n" SGR_DEFT
+                          SGR_NOBB SGR_CLOR(49, 33)   ">-- Type: %s --<\n" \
+                                                      ">--  Msg: %s --<\n" \
+                                                      ">--  Pos: %s --<\n\n" SGR_DEFT
 
 #define MAX_CMD_STR_LENGTH     256
 #define MAX_CMD_INFO_NUM        64
@@ -45,11 +46,13 @@
 #define EXIT_FAILURE             1  // Same as the already defined one in `stdlib.h`
 #define EXIT_ERROR               2
 
-#define EXEC_EMPTY              -2
-#define EXEC_NO_INNER           -1
+#define EXEC_EMPTY              -3
+#define EXEC_NO_INNER           -2
+#define EXEC_NOT_YET            -1
 #define EXEC_NORMAL              0
 #define EXEC_FAILURE             1
 #define EXEC_PIPE                2
+#define EXEC_PIPE_FAILURE        3
 
 #define SET_IO_SUCCESS           0
 #define SET_IO_FAILURE           1
@@ -60,30 +63,31 @@
 #define FILE_PERM_DEFT  S_IRUSR  | S_IWUSR  | \
                         S_IRGRP  | S_IWGRP  | S_IROTH  // The permissions `-rw-rw-r--` of a file
 
-#define ERR_NONE   0
-#define ERR_CMPLX  1
-#define ERR_IO     2
-#define ERR_PIPE   3
-#define ERR_FORK   4
-#define ERR_WAIT   5
-#define ERR_RDCMD  6
-#define ERR_PRCMD  7
-#define ERR_PRARG  8
-#define ERR_EXCMD  9
-#define ERR_CMDLG 10
-#define ERR_CMDMN 11
-#define ERR_ARGIV 12
-#define ERR_ARGMN 13
-#define ERR_RDRIV 14
-#define ERR_RDRMN 15
-#define ERR_CMDIN 16
-#define ERR_CMDIO 17
-#define ERR_CMDEP 18
-#define ERR_CMDEX 19
-#define ERR_CMDPP 20
-#define ERR_CDNAR 21
-#define ERR_CDNDR 22
-#define ERR_CDFAL 23
+#define ERR_UNK   -1  // Unknown Error (and other unlisted error code)
+#define ERR_NONE   0  // None Error
+#define ERR_CMPLX  1  // Complex Error
+#define ERR_IO     2  // I/O Error
+#define ERR_PIPE   3  // Pipe Error
+#define ERR_FORK   4  // Fork Error
+#define ERR_WAIT   5  // Wait Error
+#define ERR_RDCMD  6  // Read Commands Error
+#define ERR_PRCMD  7  // Parse Commands Error
+#define ERR_PRARG  8  // Parse Arguments Error
+#define ERR_EXCMD  9  // Execute Command Error
+#define ERR_CMDLG 10  // Commands Too Long Error
+#define ERR_CMDMN 11  // Commands Too Many Error
+#define ERR_ARGIV 12  // Argument Invalid Error
+#define ERR_ARGMN 13  // Arguments Too Many Error
+#define ERR_RDRIV 14  // Redirection Argument Invalid Error
+#define ERR_RDRMN 15  // Redirection Too Many Error
+#define ERR_CMDIN 16  // Command Inner Error
+#define ERR_CMDIO 17  // Command I/O Error
+#define ERR_CMDEP 18  // Command Empty Error
+#define ERR_CMDEX 19  // Command Executing Error
+#define ERR_CMDPP 20  // Command Pipe Error
+#define ERR_CDNAR 21  // CD: No Argument Error
+#define ERR_CDNDR 22  // CD: Not Directory Error
+#define ERR_CDFAL 23  // CD: Failure Error
 
 #define FNA       __func__  // The name string of the current function.
 
@@ -175,11 +179,16 @@ int shell_loop()
 {
     int cmd_string_size;
 
+    Command_Info* cmd_info;
     int exec_status;
     int exit_code;
 
+    bool should_restart_loop;
+
     while(true)
     {
+        should_restart_loop = false;
+
         if(fflush(NULL) == -1)
         {
             // /FIXME: ERROR: Flush all streams error.
@@ -230,107 +239,108 @@ int shell_loop()
             {
                 // /FIXME: ERROR: Command arguments parsing error.
                 error(ERR_PRARG, FNA);
-                continue;
+                should_restart_loop = true;
             }
         }
+        if(should_restart_loop) continue;
 
         // EXECUTE
-        for(int i = 0; i < cmd_infos_num; i++)
+        exec_status = EXEC_NOT_YET;
+        for(int i = 0; i < cmd_infos_num && exec_status != EXEC_FAILURE; i++)
         {
-            if(cmd_infos[i].arg_strings[0] != NULL)
+            cmd_info = &(cmd_infos[i]);
+            if(cmd_info->arg_strings[0] != NULL)
             {
                 if(fflush(NULL) == -1)
                 {
                     // /FIXME: ERROR: Flush all streams error.
                     error(ERR_IO, FNA);
-                    continue;
+                    return EXIT_FAILURE;
                 }
+
                 if((exec_status = execute_inner(i)) == EXEC_NO_INNER)
                 {
-                    switch(exec_status = execute_outer(i))
-                    {
-                        case EXEC_EMPTY:
-                        case EXEC_NORMAL:
-                            if(dup2(stdin_fd, STDIN_FILENO) == -1)
-                            {
-                                // /FIXME: ERROR: File streams operations error.
-                                error(ERR_IO, FNA);
-                                continue;
-                            }
-                            if(dup2(stdout_fd, STDOUT_FILENO) == -1)
-                            {
-                                // /FIXME: ERROR: File streams operations error.
-                                error(ERR_IO, FNA);
-                                continue;
-                            }
-                            if(dup2(stderr_fd, STDERR_FILENO) == -1)
-                            {
-                                // /FIXME: ERROR: File streams operations error.
-                                error(ERR_IO, FNA);
-                                continue;
-                            }
-                            if(fflush(NULL) == -1)
-                            {
-                                // /FIXME: ERROR: Flush all streams error.
-                                error(ERR_IO, FNA);
-                                continue;
-                            }
+                    exec_status = execute_outer(i);
+                }
 
-                            exit_code = WEXITSTATUS(cmd_infos[i].exit_status);
-                            if(is_term_sgr)
+                switch(exec_status)
+                {
+                    case EXEC_FAILURE:
+                    case EXEC_PIPE_FAILURE:
+                        // /FIXME: ERROR: Command executing error.
+                        error(ERR_EXCMD, FNA);
+                        for(i++; i < cmd_infos_num && cmd_infos[i].has_pipe == true; i++);
+
+                    case EXEC_EMPTY:
+                    case EXEC_NORMAL:
+                        if(dup2(stdin_fd, STDIN_FILENO) == -1)
+                        {
+                            // /FIXME: ERROR: File streams operations error.
+                            error(ERR_IO, FNA);
+                            return EXIT_FAILURE;
+                        }
+                        if(dup2(stdout_fd, STDOUT_FILENO) == -1)
+                        {
+                            // /FIXME: ERROR: File streams operations error.
+                            error(ERR_IO, FNA);
+                            return EXIT_FAILURE;
+                        }
+                        if(dup2(stderr_fd, STDERR_FILENO) == -1)
+                        {
+                            // /FIXME: ERROR: File streams operations error.
+                            error(ERR_IO, FNA);
+                            return EXIT_FAILURE;
+                        }
+                        if(fflush(NULL) == -1)
+                        {
+                            // /FIXME: ERROR: Flush all streams error.
+                            error(ERR_IO, FNA);
+                            return EXIT_FAILURE;
+                        }
+
+                        if(exec_status == EXEC_FAILURE) break;
+
+                        exit_code = WEXITSTATUS(cmd_info->exit_status);
+                        if(is_term_sgr)
+                        {
+                            if(exit_code == EXIT_SUCCESS)
                             {
-                                if(exit_code == EXIT_SUCCESS)
-                                {
-                                    fprintf(stdout, TERM_EXIT_SGR, exit_code);
-                                }
-                                else
-                                {
-                                    fprintf(stdout, TERM_EXIT_ERR_SGR, exit_code);
-                                }
+                                fprintf(stdout, TERM_EXIT_SGR, exit_code);
                             }
                             else
                             {
-                                fprintf(stdout, TERM_EXIT, exit_code);
+                                fprintf(stdout, TERM_EXIT_ERR_SGR, exit_code);
                             }
-                            break;
+                        }
+                        else
+                        {
+                            fprintf(stdout, TERM_EXIT, exit_code);
+                        }
+                        break;
 
-                        case EXEC_PIPE:
-                            break;
-
-                        case EXEC_FAILURE:
-                            // /FIXME: ERROR: Command executing error.
-                            error(ERR_EXCMD, FNA);
-                            continue;
-                            break;
-                    }
-                }
-                else if(exec_status == EXEC_FAILURE)
-                {
-                    // /FIXME: ERROR: Inner command executing error.
-                    error(ERR_EXCMD, FNA);
-                    continue;
+                    case EXEC_PIPE:
+                        break;
                 }
             }
         }
-        error(ERR_NONE, FNA);
 
         if(close(stdin_fd) == -1)
         {
             // /FIXME: ERROR: File streams error.
             error(ERR_IO, FNA);
-            continue;
+            return EXIT_FAILURE;
         }
         if(close(stdout_fd) == -1)
         {
             // /FIXME: ERROR: File streams error.
             error(ERR_IO, FNA);
-            continue;
+            return EXIT_FAILURE;
         }
         if(close(stderr_fd) == -1)
         {
             // /FIXME: ERROR: File streams error.
             error(ERR_IO, FNA);
-            continue;
+            return EXIT_FAILURE;
         }
     }
 
@@ -380,6 +390,10 @@ int read_commands()
                     is_new_line = true;
                     cmd_string_size++;
                 }
+                else
+                {
+                    cmd_string[cmd_string_size] = '\0';
+                }
                 break;
             }
             else if(current_char == '\'')
@@ -409,7 +423,7 @@ int parse_commands(const int cmd_string_size)
     bool parsing_single_quote = false;
     bool parsing_double_quote = false;
 
-    for(int i = 0; i <= cmd_string_size; i++)
+    for(int i = 0; i < cmd_string_size; i++)
     {
         switch(cmd_string[i])
         {
@@ -424,16 +438,6 @@ int parse_commands(const int cmd_string_size)
             case '\n':
                 if(parsing_double_quote || parsing_single_quote) break;
                 cmd_string[i--] = ' ';
-                break;
-            
-            case '\'':
-                if(parsing_double_quote) break;
-                parsing_single_quote = !parsing_single_quote;
-                break;
-            
-            case '\"':
-                if(parsing_single_quote) break;
-                parsing_double_quote = !parsing_double_quote;
                 break;
             
             case '\0':
@@ -469,6 +473,14 @@ int parse_commands(const int cmd_string_size)
                     parsing_cmd = false;
                 }
                 break;
+
+            case '\'':
+                if(parsing_double_quote) break;
+                parsing_single_quote = !parsing_single_quote;
+            
+            case '\"':
+                if(parsing_single_quote) break;
+                parsing_double_quote = !parsing_double_quote;
 
             default:
                 if(!parsing_cmd)
@@ -626,7 +638,6 @@ int parse_args(const int cmd_info_index)
                     // /FIXME: ERROR: Redirection argument error.
                     error(ERR_RDRIV, FNA);
                     return -1;
-                    
                 }
                 if(redir_to_num >= MAX_CMD_REDIR_NUM)
                 {
@@ -713,16 +724,19 @@ int execute_inner(const int cmd_info_index)
         {
             if(strcmp(cmd_info->arg_strings[0], builtin_cmd[builtin_counter]) == 0)
             {
-                if((*builtin_func[builtin_counter])(cmd_info->arg_strings) == EXIT_FAILURE)
-                {
-                    // /FIXME: ERROR: Inner command failed error.
-                    error(ERR_CMDIN, FNA);
-                    return EXEC_FAILURE;
-                }
-                else
-                {
-                    return EXEC_NORMAL;
-                }
+                int exit_code = (*builtin_func[builtin_counter])(cmd_info->arg_strings);
+                cmd_info->exit_status = exit_code << 8;
+                // if(exit_code == EXIT_SUCCESS)
+                // {
+                //     return EXEC_NORMAL;
+                // }
+                // else
+                // {
+                //     // /FIXME: ERROR: Inner command failed error.
+                //     error(ERR_CMDIN, FNA);
+                //     return EXEC_FAILURE;
+                // }
+                return EXEC_NORMAL;
             }
         }
     }
@@ -772,7 +786,7 @@ int execute_outer(const int cmd_info_index)
                 error(ERR_IO, FNA);
                 exit(EXIT_FAILURE);
             }
-            if(set_cmd_io(cmd_info, STDIN_FILENO, file_desc[1]) == SET_IO_FAILURE)
+            if(set_cmd_io(cmd_info, STDIN_FILENO, file_desc[1]) != SET_IO_SUCCESS)
             {
                 // /FIXME: ERROR: Command IO error.
                 error(ERR_CMDIO, FNA);
@@ -781,7 +795,7 @@ int execute_outer(const int cmd_info_index)
         }
         else
         {
-            if(set_cmd_io(cmd_info, STDIN_FILENO, STDOUT_FILENO) == SET_IO_FAILURE)
+            if(set_cmd_io(cmd_info, STDIN_FILENO, STDOUT_FILENO) != SET_IO_SUCCESS)
             {
                 // /FIXME: ERROR: Command IO error.
                 error(ERR_CMDIO, FNA);
@@ -813,11 +827,20 @@ int execute_outer(const int cmd_info_index)
 
         if(cmd_info->has_pipe)
         {
+            if(WEXITSTATUS(cmd_info->exit_status) != EXIT_SUCCESS)
+            {
+                // /FIXME: ERROR: Command failed cannot pipe.
+                error(ERR_CMDPP, FNA);
+                close(file_desc[1]);
+                return EXEC_PIPE_FAILURE;
+            }
+
             if(cmd_info_index + 1 >= cmd_infos_num)
             {
                 // /FIXME: ERROR: Pipe to nothing error.
                 error(ERR_CMDPP, FNA);
-                return EXEC_FAILURE;
+                close(file_desc[1]);
+                return EXEC_PIPE_FAILURE;
             }
 
             cmd_info = &(cmd_infos[cmd_info_index + 1]);
@@ -827,7 +850,7 @@ int execute_outer(const int cmd_info_index)
                 error(ERR_IO, FNA);
                 return EXEC_FAILURE;
             }
-            if(set_cmd_io(cmd_info, file_desc[0], STDOUT_FILENO) == SET_IO_FAILURE)
+            if(set_cmd_io(cmd_info, file_desc[0], STDOUT_FILENO) != SET_IO_SUCCESS)
             {
                 // /FIXME: ERROR: Command IO error.
                 error(ERR_CMDIO, FNA);
@@ -875,6 +898,38 @@ void init_cmd_info(Command_Info* cmd_info)
 
 int set_cmd_io(const Command_Info* cmd_info, const int input_file_desc, const int output_file_desc)
 {
+    // PIPE
+    if(input_file_desc != STDIN_FILENO)
+    {
+        if(dup2(input_file_desc, STDIN_FILENO) == -1)
+        {
+            // /FIXME: ERROR: File streams operations error.
+            error(ERR_IO, FNA);
+            return SET_IO_FAILURE;
+        }
+        if(close(input_file_desc) == -1)
+        {
+            // /FIXME: ERROR: File streams operations error.
+            error(ERR_IO, FNA);
+            return SET_IO_FAILURE;
+        }
+    }
+    if(output_file_desc != STDOUT_FILENO)
+    {
+        if(dup2(output_file_desc, STDOUT_FILENO) == -1)
+        {
+            // /FIXME: ERROR: File streams operations error.
+            error(ERR_IO, FNA);
+            return SET_IO_FAILURE;
+        }
+        if(close(output_file_desc) == -1)
+        {
+            // /FIXME: ERROR: File streams operations error.
+            error(ERR_IO, FNA);
+            return SET_IO_FAILURE;
+        }
+    }
+
     // REDIR
     int redir_from_fd, redir_from_flag, redir_from_fd2;
     for(int i = 0; i < MAX_CMD_REDIR_NUM; i++)
@@ -965,38 +1020,6 @@ int set_cmd_io(const Command_Info* cmd_info, const int input_file_desc, const in
         }
     }
 
-    // PIPE
-    if(input_file_desc != STDIN_FILENO)
-    {
-        if(dup2(input_file_desc, STDIN_FILENO) == -1)
-        {
-            // /FIXME: ERROR: File streams operations error.
-            error(ERR_IO, FNA);
-            return SET_IO_FAILURE;
-        }
-        if(close(input_file_desc) == -1)
-        {
-            // /FIXME: ERROR: File streams operations error.
-            error(ERR_IO, FNA);
-            return SET_IO_FAILURE;
-        }
-    }
-    if(output_file_desc != STDOUT_FILENO)
-    {
-        if(dup2(output_file_desc, STDOUT_FILENO) == -1)
-        {
-            // /FIXME: ERROR: File streams operations error.
-            error(ERR_IO, FNA);
-            return SET_IO_FAILURE;
-        }
-        if(close(output_file_desc) == -1)
-        {
-            // /FIXME: ERROR: File streams operations error.
-            error(ERR_IO, FNA);
-            return SET_IO_FAILURE;
-        }
-    }
-
     return SET_IO_SUCCESS;
 }
 
@@ -1066,9 +1089,10 @@ int func_exit(const char** args_string)
     return EXIT_SUCCESS;
 }
 
-int error(const int error_type, const char* position)  // TODO
+int error(const int error_type, const char* position)
 {
     // WARNING: I/O Errors in this function would be omitted.
+    // WARNING: In this function, error messages would be output to the original `stderr`.
 
     int current_stderr_fd = dup(STDERR_FILENO);
     dup2(stderr_fd, STDERR_FILENO);
@@ -1077,16 +1101,16 @@ int error(const int error_type, const char* position)  // TODO
     {
         case ERR_NONE:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "No Error",
+                "None Error",
                 "Nothing wrong but the error handler called.",
                 position); break;
-        
+
         case ERR_CMPLX:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Complex Error",
                 "The error with some complex situations. Seeing the context of errors may help.",
                 position); break;
-        
+
         case ERR_IO:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "I/O Error",
@@ -1098,127 +1122,132 @@ int error(const int error_type, const char* position)  // TODO
                 "Pipe Error",
                 "Failed to create a pipe to execute commands with pipes.",
                 position); break;
-        
+
         case ERR_FORK:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Fork Error",
                 "Failed to fork a process to execute an outer command.",
                 position); break;
-        
+
         case ERR_WAIT:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Wait Error",
                 "Failed to wait the child process executing an outer command.",
                 position); break;
-        
+
         case ERR_RDCMD:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Read Commands Error",
                 "Failed to read the input string of commands.",
                 position); break;
-        
+
         case ERR_PRCMD:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Parse Commands Error",
                 "Failed to parse commands in the input string of commands.",
                 position); break;
-        
+
         case ERR_PRARG:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Parse Arguments Error",
                 "Failed to parse arguments in a string of a command.",
                 position); break;
-        
+
         case ERR_EXCMD:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Execute Command Error",
                 "Failed to execute the command.",
                 position); break;
-        
+
         case ERR_CMDLG:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CMDMN:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_ARGIV:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_ARGMN:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_RDRIV:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_RDRMN:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CMDIN:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CMDIO:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CMDEP:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CMDEX:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CMDPP:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CDNAR:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CDNDR:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
-                position); break;
-        
-        case ERR_CDFAL:
-            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
-                "Error",
-                ".",
+                "Commands Too Long Error",
+                "The input string of commands is too long.",
                 position); break;
 
+        case ERR_CMDMN:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Commands Too Many Error",
+                "There are too many commands in the input string.",
+                position); break;
+
+        case ERR_ARGIV:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Argument Invalid Error",
+                "There are some problems in parsing an argument. "
+                "There may be some arguments not in correct formats.",
+                position); break;
+
+        case ERR_ARGMN:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Arguments Too Many Error",
+                "There are too many arguments in a command.",
+                position); break;
+
+        case ERR_RDRIV:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Redirection Argument Invalid Error",
+                "There are some problems in parsing an argument of a redirection expression. "
+                "There may be arguments empty or not in correct formats.",
+                position); break;
+
+        case ERR_RDRMN:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Redirection Too Many Error",
+                "There are too many redirections in a command.",
+                position); break;
+
+        case ERR_CMDIN:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Command Inner Error",
+                "Failed to execute the inner command.",
+                position); break;
+
+        case ERR_CMDIO:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Command I/O Error",
+                "Failed to set and do I/O operations of the command within pipe or redirection expressions.",
+                position); break;
+
+        case ERR_CMDEP:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Command Empty Error",
+                "It is not possible to execute an empty command.",
+                position); break;
+
+        case ERR_CMDEX:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Command Executing Error",
+                "Failed to execute the command. "
+                "Occasionally, the input command might not be found.",
+                position); break;
+
+        case ERR_CMDPP:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "Command Pipe Error",
+                "The command with a pipe to nothing (no more commands to be piped afterward). "
+                "Or the command exited not successful so that the pipes cannot continued.",
+                position); break;
+
+        case ERR_CDNAR:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "CD: No Argument Error",
+                "There is no argument to indicate where the directory be changed to.",
+                position); break;
+
+        case ERR_CDNDR:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "CD: Not Directory Error",
+                "The target path does not indicate to a directory.",
+                position); break;
+
+        case ERR_CDFAL:
+            fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
+                "CD: Failure Error",
+                "Failed to execute the CD inner command.",
+                position); break;
+
+        case ERR_UNK:
         default:
             fprintf(stderr, is_term_sgr ? TERM_ERR_SGR : TERM_ERR,
                 "Unknown Error",
@@ -1226,6 +1255,7 @@ int error(const int error_type, const char* position)  // TODO
                 position); break;
     }
 
+    fflush(stderr);
     dup2(current_stderr_fd, STDERR_FILENO);
     close(current_stderr_fd);
 
