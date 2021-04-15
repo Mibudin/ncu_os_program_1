@@ -1,0 +1,11 @@
+total 120
+drwxrwxr-x 2 mibudin mibudin  4096 Apr  7 23:53 .
+drwxrwxr-x 7 mibudin mibudin  4096 Apr  7 20:38 ..
+-rw-rw-r-- 1 mibudin mibudin   953 Apr  7 16:43 note.md
+-rw-rw-r-- 1 mibudin mibudin     0 Apr  7 23:53 o1
+-rw-rw-r-- 1 mibudin mibudin     0 Apr  7 23:53 o2
+-rw-rw-r-- 1 mibudin mibudin     0 Apr  7 23:53 o3
+-rw-rw-r-- 1 mibudin mibudin 12855 Apr  4 21:09 ref.c
+-rwxrwxr-x 1 mibudin mibudin 18040 Apr  4 21:10 shell_backup.out
+-rw-rw-r-- 1 mibudin mibudin 40161 Apr  7 16:40 shell.c
+-rwxrwxr-x 1 mibudin mibudin 31200 Apr  7 16:40 shell.out

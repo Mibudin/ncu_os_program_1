@@ -3,6 +3,9 @@
         "wait.h": "c",
         "stat.h": "c",
         "string.h": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "stdbool.h": "c",
+        "fcntl.h": "c",
+        "stdlib.h": "c"
     }
 }
