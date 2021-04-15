@@ -45,6 +45,7 @@
 #define EXIT_SUCCESS             0  // Same as the already defined one in `stdlib.h`
 #define EXIT_FAILURE             1  // Same as the already defined one in `stdlib.h`
 #define EXIT_ERROR               2
+#define EXIT_BACKGROUND          0
 
 #define EXEC_EMPTY              -3
 #define EXEC_NO_INNER           -2
@@ -822,8 +823,12 @@ int execute_outer(const int cmd_info_index)
                 error(ERR_WAIT, FNA);
                 return EXEC_FAILURE;
             }
+            cmd_info->exit_status = stat_loc;
         }
-        cmd_info->exit_status = stat_loc;
+        else
+        {
+            cmd_info->exit_status = stat_loc = EXIT_BACKGROUND << 8;
+        }
 
         if(cmd_info->has_pipe)
         {
